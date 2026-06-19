@@ -14,6 +14,7 @@ lora_target: all
 dataset: sft_demonstration_dataset
 dataset_dir: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/datasets
 template: gemma4n
+enable_thinking: false
 cutoff_len: 2048
 max_samples: 1000000
 overwrite_cache: true
@@ -21,17 +22,19 @@ preprocessing_num_workers: 1
 dataloader_num_workers: 0
 
 ### output
-output_dir: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/saves/gemma-4-E2B-it/lora/sft_3ep
+output_dir: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/saves/gemma-4-E2B-it/lora/sft_3ep_nothink
 logging_steps: 10
 save_steps: 500
 plot_loss: true
-overwrite_output_dir: true
+overwrite_output_dir: false
 save_only_model: false
 report_to: none
 
 ### train
-per_device_train_batch_size: 1
-gradient_accumulation_steps: 8
+per_device_train_batch_size: 16
+gradient_accumulation_steps: 1
+auto_find_batch_size: true
+gradient_checkpointing: true
 learning_rate: 1.0e-4
 num_train_epochs: 3.0
 lr_scheduler_type: cosine

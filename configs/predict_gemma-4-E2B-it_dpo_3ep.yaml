@@ -1,6 +1,6 @@
 ### model
 model_name_or_path: google/gemma-4-E2B-it
-adapter_name_or_path: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/saves/gemma-4-E2B-it/lora/dpo_3ep
+adapter_name_or_path: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/saves/gemma-4-E2B-it/lora/dpo_3ep_nothink
 cache_dir: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/.cache/huggingface
 trust_remote_code: true
 
@@ -13,6 +13,7 @@ finetuning_type: lora
 eval_dataset: ppo_unlabeled_prompts_dataset_test
 dataset_dir: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/datasets
 template: gemma4n
+enable_thinking: false
 cutoff_len: 2048
 max_samples: 1000000
 overwrite_cache: true
@@ -20,12 +21,14 @@ preprocessing_num_workers: 1
 dataloader_num_workers: 0
 
 ### output
-output_dir: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/saves/gemma-4-E2B-it/predict/dpo_3ep
-overwrite_output_dir: true
+output_dir: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/saves/gemma-4-E2B-it/predict/dpo_3ep_nothink_greedy
+overwrite_output_dir: false
 report_to: none
 
 ### eval
 per_device_eval_batch_size: 1
 predict_with_generate: true
+do_sample: false
+max_new_tokens: 256
 bf16: true
 ddp_timeout: 180000000
