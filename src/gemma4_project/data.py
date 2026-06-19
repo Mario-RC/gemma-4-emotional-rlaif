@@ -24,8 +24,11 @@ SOURCE_FILES = (
 )
 TARGET_FILES = (
     "sft_demonstration_dataset.json",
+    "sft_demonstration_dataset_foundation.json",
     "sft_demonstration_dataset_test.json",
+    "sft_demonstration_dataset_test_history.json",
     "dpo_preference_dataset.json",
+    "ppo_unlabeled_prompts_dataset.json",
     "ppo_unlabeled_prompts_dataset_test.json",
 )
 
@@ -116,18 +119,25 @@ def prepare_datasets(root: Path, repo_id: str, revision: str | None, force: bool
         "sft_demonstration_dataset.json": len(sft_train),
         "sft_demonstration_dataset_test.json": len(sft_test),
         "dpo_preference_dataset.json": len(load_json(dpo_train_path)),
+        "ppo_unlabeled_prompts_dataset.json": len(dialogues_train),
         "ppo_unlabeled_prompts_dataset_test.json": len(dialogues_test),
     }
+    for filename in ("sft_demonstration_dataset_foundation.json", "sft_demonstration_dataset_test_history.json"):
+        path = datasets_dir / filename
+        if path.exists():
+            targets[filename] = len(load_json(path))
 
     wrote_data = any(
         (
             write_json(datasets_dir / "sft_demonstration_dataset.json", sft_train, force=force),
             write_json(datasets_dir / "sft_demonstration_dataset_test.json", sft_test, force=force),
             copy_json(datasets_dir / "dpo_preference_dataset.json", dpo_train_path, force=force),
+            copy_json(datasets_dir / "ppo_unlabeled_prompts_dataset.json", dialogues_train_path, force=force),
             copy_json(datasets_dir / "ppo_unlabeled_prompts_dataset_test.json", dialogues_test_path, force=force),
         )
     )
-    write_manifest(root, repo_id, revision, targets, force=force or wrote_data)
+    if wrote_data:
+        print("[INFO] Dataset JSON files were refreshed. Canonical phase2-only files are preserved when present.")
 
     return targets
 
