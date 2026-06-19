@@ -14,14 +14,15 @@ from typing import Any
 
 DEFAULT_ROOT = Path(os.environ.get("GEMMA4_ROOT", Path(__file__).resolve().parents[2])).resolve()
 DEFAULT_MODELS = ("gemma-4-E2B-it", "gemma-4-E4B-it")
-REFERENCE_MODEL = "gemma-2-9b-it-emotional-rlaif-dpo"
 RUN_CONFIGS = {
     "sft_3ep": {
         "dataset": "sft_demonstration_dataset_test",
+        "prediction_run": "sft_3ep_nothink_greedy",
         "result_file": "demonstration_data_emotional_balanced_test_results.json",
     },
     "dpo_3ep": {
         "dataset": "ppo_unlabeled_prompts_dataset_test",
+        "prediction_run": "dpo_3ep_nothink_greedy",
         "result_file": "ppo_unlabeled_prompts_dataset_test_results.json",
     },
 }
@@ -72,6 +73,18 @@ def result_filename(dataset: str, run_name: str) -> str:
     return RUN_CONFIGS.get(run_name, {}).get("result_file", f"{dataset}_results.json")
 
 
+def prediction_run_for_run(run_name: str) -> str:
+    return RUN_CONFIGS.get(run_name, {}).get("prediction_run", run_name)
+
+
+def prediction_path_for_run(root: Path, model: str, run_name: str) -> Path:
+    preferred = root / "saves" / model / "predict" / prediction_run_for_run(run_name) / "generated_predictions.jsonl"
+    if preferred.exists():
+        return preferred
+    fallback = root / "saves" / model / "predict" / run_name / "generated_predictions.jsonl"
+    return fallback
+
+
 def prediction_keys(run_name: str) -> tuple[str, list[str]]:
     primary = f"predict_{run_name}"
     if run_name == "sft_3ep":
@@ -83,6 +96,10 @@ def prediction_keys(run_name: str) -> tuple[str, list[str]]:
 
 def safe_rate(value: int, total: int) -> float:
     return round(value / total, 6) if total else 0.0
+
+
+def pct(rate: float) -> float:
+    return round(rate * 100, 2)
 
 
 def score_records(records: list[dict[str, Any]], predict_key: str) -> dict[str, Any]:
@@ -126,6 +143,8 @@ def score_records(records: list[dict[str, Any]], predict_key: str) -> dict[str, 
         "response_2_accuracy": safe_rate(correct_by_position[1], target_available[1]),
         "response_3_accuracy": safe_rate(correct_by_position[2], target_available[2]),
         "all_three_accuracy": safe_rate(all_three_correct, total),
+        "all_three_correct": all_three_correct,
+        "third_response_neutral_count": third_neutral,
         "third_response_neutral_rate": safe_rate(third_neutral, total),
         "correct_by_position": {
             "response_1": correct_by_position[0],
@@ -202,6 +221,49 @@ def write_summary_tables(root: Path, summaries: list[dict[str, Any]]) -> None:
             )
 
 
+def emotional_metric_row(summary: dict[str, Any]) -> dict[str, Any]:
+    correct_by_position = summary["correct_by_position"]
+    return {
+        "model": summary["model"],
+        "dataset": summary["dataset"],
+        "prediction_model": summary["run_name"],
+        "total_examples": summary["total_examples"],
+        "prediction_file": summary["prediction_file"],
+        "results_file": summary["results_file"],
+        "missing_predictions": summary["missing_predictions"],
+        "valid_three_tag_predictions": summary["valid_three_tag_predictions"],
+        "valid_three_tag_percentage": pct(summary["valid_three_tag_rate"]),
+        "user_emotion": {
+            "correct": correct_by_position["response_1"],
+            "percentage": pct(summary["response_1_accuracy"]),
+        },
+        "chatbot_emotion": {
+            "correct": correct_by_position["response_2"],
+            "percentage": pct(summary["response_2_accuracy"]),
+        },
+        "neutral_emotion": {
+            "correct": summary["third_response_neutral_count"],
+            "percentage": pct(summary["third_response_neutral_rate"]),
+        },
+        "all_three_emotions": {
+            "correct": summary["all_three_correct"],
+            "percentage": pct(summary["all_three_accuracy"]),
+        },
+    }
+
+
+def write_per_model_emotional_summaries(root: Path, summaries: list[dict[str, Any]]) -> None:
+    metrics_by_model: dict[str, list[dict[str, Any]]] = {}
+    for summary in summaries:
+        metrics_by_model.setdefault(summary["model"], []).append(emotional_metric_row(summary))
+
+    for model, metrics in metrics_by_model.items():
+        write_json(
+            root / "saves" / model / "emotional_balanced" / "emotional_results_summary.json",
+            {"model": model, "metrics": metrics},
+        )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
@@ -223,7 +285,7 @@ def main() -> int:
         dataset = load_json_array(dataset_path)
 
         for model in args.models:
-            prediction_path = args.root / "saves" / model / "predict" / run_name / "generated_predictions.jsonl"
+            prediction_path = prediction_path_for_run(args.root, model, run_name)
             if not prediction_path.exists():
                 message = f"[WARN] Missing prediction file: {prediction_path}"
                 if args.strict:
@@ -268,6 +330,7 @@ def main() -> int:
 
     write_json(args.root / "analysis" / "gemma4_summary.json", summaries)
     write_summary_tables(args.root, summaries)
+    write_per_model_emotional_summaries(args.root, summaries)
     print(f"Wrote {len(summaries)} Gemma4 summary rows to {args.root / 'analysis'}")
     return 0
 

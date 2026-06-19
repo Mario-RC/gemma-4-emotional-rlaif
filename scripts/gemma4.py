@@ -17,7 +17,6 @@ MODELS = {
     "e2b": "gemma-4-E2B-it",
     "e4b": "gemma-4-E4B-it",
 }
-REFERENCE_MODEL = "gemma-2-9b-it-emotional-rlaif-dpo"
 FULL_STAGES = ("sft", "predict_sft", "dpo", "predict_dpo")
 SMOKE_STAGES = ("sft", "dpo")
 PREDICT_RUNS = {
@@ -95,32 +94,18 @@ def log_for(model_name: str, stage: str, smoke: bool) -> Path:
 
 def artifact_for(model_name: str, stage: str, smoke: bool) -> Path:
     if smoke and stage == "sft":
-        return ROOT / "saves" / model_name / "lora" / "sft_smoke" / "adapter_model.safetensors"
+        return ROOT / "saves" / model_name / "lora" / "sft_smoke_nothink" / "adapter_model.safetensors"
     if smoke and stage == "dpo":
-        return ROOT / "saves" / model_name / "lora" / "smoke" / "adapter_model.safetensors"
+        return ROOT / "saves" / model_name / "lora" / "smoke_nothink" / "adapter_model.safetensors"
     if stage == "sft":
-        return ROOT / "saves" / model_name / "lora" / "sft_3ep" / "adapter_model.safetensors"
+        return ROOT / "saves" / model_name / "lora" / "sft_3ep_nothink" / "adapter_model.safetensors"
     if stage == "dpo":
-        return ROOT / "saves" / model_name / "lora" / "dpo_3ep" / "adapter_model.safetensors"
+        return ROOT / "saves" / model_name / "lora" / "dpo_3ep_nothink" / "adapter_model.safetensors"
     if stage == "predict_sft":
-        return ROOT / "saves" / model_name / "predict" / "sft_3ep" / "generated_predictions.jsonl"
+        return ROOT / "saves" / model_name / "predict" / "sft_3ep_nothink_greedy" / "generated_predictions.jsonl"
     if stage == "predict_dpo":
-        return ROOT / "saves" / model_name / "predict" / "dpo_3ep" / "generated_predictions.jsonl"
+        return ROOT / "saves" / model_name / "predict" / "dpo_3ep_nothink_greedy" / "generated_predictions.jsonl"
     raise ValueError(f"Unsupported stage: {stage}")
-
-
-def reference_artifact(stage: str) -> Path:
-    if stage == "predict":
-        return ROOT / "saves" / REFERENCE_MODEL / "predict" / "dpo_3ep" / "generated_predictions.jsonl"
-    if stage == "analyze":
-        return (
-            ROOT
-            / "saves"
-            / REFERENCE_MODEL
-            / "emotional_balanced"
-            / "ppo_unlabeled_prompts_dataset_test_results.json"
-        )
-    raise ValueError(f"Unsupported reference stage: {stage}")
 
 
 def latest_checkpoint_for(model_name: str, stage: str, smoke: bool) -> Path | None:
@@ -231,17 +216,6 @@ def run_llamafactory(
     return stream_command(command, env=env, cwd=ROOT / "LlamaFactory", log_path=log_path)
 
 
-def run_reference_predict(force: bool = False) -> int:
-    artifact = reference_artifact("predict")
-    if skip_existing(f"{REFERENCE_MODEL} predict_dpo", artifact, force):
-        return 0
-    env = project_env(ROOT)
-    config_path = ROOT / "configs" / "predict_reference_gemma2_dpo_3ep.yaml"
-    log_path = ROOT / "logs" / "predict_reference_gemma2_dpo_3ep.log"
-    command = [str(ROOT / "vgemma4" / "bin" / "llamafactory-cli"), "train", str(config_path)]
-    return stream_command(command, env=env, cwd=ROOT / "LlamaFactory", log_path=log_path)
-
-
 def run_module(module: str, args: list[str]) -> int:
     env = project_env(ROOT)
     command = [str(ROOT / "vgemma4" / "bin" / "python"), "-m", module, "--root", str(ROOT), *args]
@@ -290,39 +264,7 @@ def analysis_args(args: argparse.Namespace) -> list[str]:
 
 
 def command_analyze(args: argparse.Namespace) -> int:
-    code = run_module("gemma4_project.analysis", analysis_args(args))
-    if code != 0 or args.no_compare:
-        return code
-    if args.run_name == "sft_3ep":
-        print("[INFO] Skipping Gemma2 comparison for sft_3ep; only the DPO Gemma2 reference is published.")
-        return 0
-    compare_args = argparse.Namespace(
-        model=args.model,
-        strict=args.strict,
-        dataset=args.dataset,
-        run_name="dpo_3ep",
-    )
-    return run_module("gemma4_project.compare", analysis_args(compare_args))
-
-
-def command_compare(args: argparse.Namespace) -> int:
-    return run_module("gemma4_project.compare", analysis_args(args))
-
-
-def command_reference(args: argparse.Namespace) -> int:
-    if args.stage in {"predict", "all"}:
-        code = run_reference_predict(force=args.force)
-        if code != 0:
-            return code
-    if args.stage in {"analyze", "all"}:
-        artifact = reference_artifact("analyze")
-        if skip_existing(f"{REFERENCE_MODEL} analyze_dpo", artifact, args.force):
-            return 0
-        module_args = ["--models", REFERENCE_MODEL, "--run-name", "dpo_3ep"]
-        if args.strict:
-            module_args.append("--strict")
-        return run_module("gemma4_project.analysis", module_args)
-    return 0
+    return run_module("gemma4_project.analysis", analysis_args(args))
 
 
 def command_pipeline(args: argparse.Namespace) -> int:
@@ -341,7 +283,6 @@ def command_pipeline(args: argparse.Namespace) -> int:
         strict=args.strict,
         dataset=args.dataset,
         run_name=args.run_name,
-        no_compare=False,
     )
     return command_analyze(analyze_args)
 
@@ -364,32 +305,17 @@ def command_login(args: argparse.Namespace) -> int:
 
 
 def command_status(args: argparse.Namespace) -> int:
-    if args.model == "reference":
-        paths = {
-            "dpo_predictions": ROOT / "saves" / REFERENCE_MODEL / "predict" / "dpo_3ep" / "generated_predictions.jsonl",
-            "dpo_analysis": ROOT
-            / "saves"
-            / REFERENCE_MODEL
-            / "emotional_balanced"
-            / "ppo_unlabeled_prompts_dataset_test_results.json",
-        }
-        print(REFERENCE_MODEL)
-        for label, path in paths.items():
-            marker = "OK" if path.exists() else "--"
-            print(f"  {marker} {label}: {path}")
-        return 0
-
     for model_name in selected_models(args.model):
         paths = {
-            "sft_adapter": ROOT / "saves" / model_name / "lora" / "sft_3ep" / "adapter_model.safetensors",
-            "sft_predictions": ROOT / "saves" / model_name / "predict" / "sft_3ep" / "generated_predictions.jsonl",
+            "sft_adapter": ROOT / "saves" / model_name / "lora" / "sft_3ep_nothink" / "adapter_model.safetensors",
+            "sft_predictions": ROOT / "saves" / model_name / "predict" / "sft_3ep_nothink_greedy" / "generated_predictions.jsonl",
             "sft_analysis": ROOT
             / "saves"
             / model_name
             / "emotional_balanced"
             / "demonstration_data_emotional_balanced_test_results.json",
-            "dpo_adapter": ROOT / "saves" / model_name / "lora" / "dpo_3ep" / "adapter_model.safetensors",
-            "dpo_predictions": ROOT / "saves" / model_name / "predict" / "dpo_3ep" / "generated_predictions.jsonl",
+            "dpo_adapter": ROOT / "saves" / model_name / "lora" / "dpo_3ep_nothink" / "adapter_model.safetensors",
+            "dpo_predictions": ROOT / "saves" / model_name / "predict" / "dpo_3ep_nothink_greedy" / "generated_predictions.jsonl",
             "dpo_analysis": ROOT
             / "saves"
             / model_name
@@ -433,17 +359,9 @@ def build_parser() -> argparse.ArgumentParser:
     predict.add_argument("--force", action="store_true", help="Regenerate predictions even when they already exist.")
     predict.set_defaults(func=command_predict)
 
-    analyze = subparsers.add_parser("analyze", help="Analyze Gemma4 predictions and compare to Gemma2.")
+    analyze = subparsers.add_parser("analyze", help="Analyze Gemma4 predictions.")
     add_common_analysis_args(analyze)
-    analyze.add_argument("--no-compare", action="store_true")
     analyze.set_defaults(func=command_analyze)
-
-    compare = subparsers.add_parser("compare", help="Compare analyzed Gemma4 DPO results with the generated Gemma2 DPO reference.")
-    compare.add_argument("model", choices=[*MODELS, "all"], nargs="?", default="all")
-    compare.add_argument("--dataset", default=None)
-    compare.add_argument("--run-name", choices=["dpo_3ep"], default="dpo_3ep")
-    compare.add_argument("--strict", action="store_true")
-    compare.set_defaults(func=command_compare)
 
     pipeline = subparsers.add_parser("pipeline", help="Run full train pipeline and then analysis.")
     pipeline.add_argument("model", choices=[*MODELS, "all"])
@@ -463,14 +381,8 @@ def build_parser() -> argparse.ArgumentParser:
     data.add_argument("--verify-only", action="store_true", help="Only verify local dataset files.")
     data.set_defaults(func=command_data)
 
-    reference = subparsers.add_parser("reference", help="Generate the Gemma2 DPO reference from Hugging Face.")
-    reference.add_argument("--stage", choices=["predict", "analyze", "all"], default="all")
-    reference.add_argument("--strict", action="store_true")
-    reference.add_argument("--force", action="store_true", help="Regenerate reference prediction/analysis outputs.")
-    reference.set_defaults(func=command_reference)
-
     status = subparsers.add_parser("status", help="Show expected artifacts for each model.")
-    status.add_argument("model", choices=[*MODELS, "all", "reference"], nargs="?", default="all")
+    status.add_argument("model", choices=[*MODELS, "all"], nargs="?", default="all")
     status.set_defaults(func=command_status)
 
     login = subparsers.add_parser("login", help="Log in to Hugging Face using the project-local HF cache.")
