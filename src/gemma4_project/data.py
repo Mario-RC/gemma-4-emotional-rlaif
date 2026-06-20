@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from huggingface_hub import hf_hub_download
 
 
 DEFAULT_ROOT = Path(os.environ.get("GEMMA4_ROOT", Path(__file__).resolve().parents[2])).resolve()
@@ -28,8 +27,17 @@ TARGET_FILES = (
     "sft_demonstration_dataset_test.json",
     "sft_demonstration_dataset_test_history.json",
     "dpo_preference_dataset.json",
+    "rm_preference_dataset.json",
+    "rm_preference_dataset_test.json",
     "ppo_unlabeled_prompts_dataset.json",
     "ppo_unlabeled_prompts_dataset_test.json",
+)
+CANONICAL_RM_DIR = (
+    DEFAULT_ROOT.parent
+    / "sml-rlaif-alignment"
+    / "rlaif-model"
+    / "rlaif-llama-factory-training"
+    / "data"
 )
 
 
@@ -63,6 +71,13 @@ def copy_json(path: Path, source_path: Path, force: bool) -> bool:
 
 
 def download_source(repo_id: str, filename: str, revision: str | None) -> Path:
+    try:
+        from huggingface_hub import hf_hub_download
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "huggingface_hub is required to download datasets. Install project dependencies or run inside vgemma4."
+        ) from exc
+
     return Path(
         hf_hub_download(
             repo_id=repo_id,
@@ -75,6 +90,19 @@ def download_source(repo_id: str, filename: str, revision: str | None) -> Path:
 
 def filter_by_set(rows: list[dict[str, Any]], split_name: str) -> list[dict[str, Any]]:
     return [row for row in rows if row.get("set") == split_name]
+
+
+def canonical_rm_source(filename: str) -> Path:
+    return CANONICAL_RM_DIR / filename
+
+
+def require_local_source(path: Path) -> Path:
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Required local dataset source not found: {path}. "
+            "Sync or generate the canonical RM dataset files before running gemma4.py data."
+        )
+    return path
 
 
 def write_manifest(root: Path, repo_id: str, revision: str | None, counts: dict[str, int], force: bool) -> None:
@@ -93,6 +121,9 @@ def write_manifest(root: Path, repo_id: str, revision: str | None, counts: dict[
             "sft_demonstration_dataset.json": "dialogues/train.json filtered where set == sft-demonstration",
             "sft_demonstration_dataset_test.json": "dialogues/test.json filtered where set == sft-demonstration",
             "dpo_preference_dataset.json": "aif_annotations/train.json",
+            "rm_preference_dataset.json": str(canonical_rm_source('rm_preference_dataset.json')),
+            "rm_preference_dataset_test.json": str(canonical_rm_source('rm_preference_dataset_test.json')),
+            "ppo_unlabeled_prompts_dataset.json": "dialogues/train.json",
             "ppo_unlabeled_prompts_dataset_test.json": "dialogues/test.json",
         },
     }
@@ -108,9 +139,13 @@ def prepare_datasets(root: Path, repo_id: str, revision: str | None, force: bool
     dialogues_train_path = download_source(repo_id, "dialogues/train.json", revision)
     dialogues_test_path = download_source(repo_id, "dialogues/test.json", revision)
     dpo_train_path = download_source(repo_id, "aif_annotations/train.json", revision)
+    rm_train_path = require_local_source(canonical_rm_source("rm_preference_dataset.json"))
+    rm_test_path = require_local_source(canonical_rm_source("rm_preference_dataset_test.json"))
 
     dialogues_train = load_json(dialogues_train_path)
     dialogues_test = load_json(dialogues_test_path)
+    rm_train = load_json(rm_train_path)
+    rm_test = load_json(rm_test_path)
 
     sft_train = filter_by_set(dialogues_train, "sft-demonstration")
     sft_test = filter_by_set(dialogues_test, "sft-demonstration")
@@ -119,6 +154,8 @@ def prepare_datasets(root: Path, repo_id: str, revision: str | None, force: bool
         "sft_demonstration_dataset.json": len(sft_train),
         "sft_demonstration_dataset_test.json": len(sft_test),
         "dpo_preference_dataset.json": len(load_json(dpo_train_path)),
+        "rm_preference_dataset.json": len(rm_train),
+        "rm_preference_dataset_test.json": len(rm_test),
         "ppo_unlabeled_prompts_dataset.json": len(dialogues_train),
         "ppo_unlabeled_prompts_dataset_test.json": len(dialogues_test),
     }
@@ -132,6 +169,8 @@ def prepare_datasets(root: Path, repo_id: str, revision: str | None, force: bool
             write_json(datasets_dir / "sft_demonstration_dataset.json", sft_train, force=force),
             write_json(datasets_dir / "sft_demonstration_dataset_test.json", sft_test, force=force),
             copy_json(datasets_dir / "dpo_preference_dataset.json", dpo_train_path, force=force),
+            copy_json(datasets_dir / "rm_preference_dataset.json", rm_train_path, force=force),
+            copy_json(datasets_dir / "rm_preference_dataset_test.json", rm_test_path, force=force),
             copy_json(datasets_dir / "ppo_unlabeled_prompts_dataset.json", dialogues_train_path, force=force),
             copy_json(datasets_dir / "ppo_unlabeled_prompts_dataset_test.json", dialogues_test_path, force=force),
         )
@@ -139,6 +178,7 @@ def prepare_datasets(root: Path, repo_id: str, revision: str | None, force: bool
     if wrote_data:
         print("[INFO] Dataset JSON files were refreshed. Canonical phase2-only files are preserved when present.")
 
+    write_manifest(root, repo_id, revision, targets, force=force)
     return targets
 
 

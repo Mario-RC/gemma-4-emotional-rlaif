@@ -39,6 +39,26 @@
       "system": "system"
     }
   },
+  "rm_preference_dataset": {
+    "file_name": "rm_preference_dataset.json",
+    "ranking": true,
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "conversations",
+      "chosen": "chosen",
+      "rejected": "rejected"
+    }
+  },
+  "rm_preference_dataset_test": {
+    "file_name": "rm_preference_dataset_test.json",
+    "ranking": true,
+    "formatting": "sharegpt",
+    "columns": {
+      "messages": "conversations",
+      "chosen": "chosen",
+      "rejected": "rejected"
+    }
+  },
   "ppo_unlabeled_prompts_dataset": {
     "file_name": "ppo_unlabeled_prompts_dataset.json",
     "columns": {
