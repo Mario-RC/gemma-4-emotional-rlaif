@@ -1,42 +1,51 @@
 ### model
 model_name_or_path: google/gemma-4-E4B-it
-cache_dir: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/.cache/huggingface
+adapter_name_or_path: saves/gemma-4-E4B-it/lora/sft_3ep
+cache_dir: .cache/huggingface
 trust_remote_code: true
 
 ### method
-stage: sft
+stage: rm
 do_train: true
 finetuning_type: lora
 lora_rank: 8
 lora_target: all
 
 ### dataset
-dataset: sft_demonstration_dataset
-dataset_dir: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/datasets
+dataset: rm_preference_dataset
+dataset_dir: datasets
 template: gemma4n
 enable_thinking: false
 cutoff_len: 2048
-max_samples: 8
+max_samples: 1000000
 overwrite_cache: true
 preprocessing_num_workers: 1
 dataloader_num_workers: 0
 
 ### output
-output_dir: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/saves/gemma-4-E4B-it/lora/sft_smoke_nothink
-logging_steps: 1
-save_steps: 1000
+output_dir: saves/gemma-4-E4B-it/lora/rm_1ep
+logging_steps: 10
+save_steps: 500
 plot_loss: true
 overwrite_output_dir: false
 save_only_model: false
 report_to: none
 
 ### train
-per_device_train_batch_size: 1
-gradient_accumulation_steps: 1
+per_device_train_batch_size: 8
+gradient_accumulation_steps: 8
+auto_find_batch_size: true
+gradient_checkpointing: true
 learning_rate: 1.0e-4
-max_steps: 1
+num_train_epochs: 1.0
 lr_scheduler_type: cosine
-warmup_ratio: 0.0
+warmup_ratio: 0.1
 bf16: true
 ddp_timeout: 180000000
 resume_from_checkpoint: null
+
+### eval
+val_size: 0.07
+per_device_eval_batch_size: 1
+eval_strategy: steps
+eval_steps: 5100

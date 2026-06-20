@@ -1,7 +1,7 @@
 ### model
-model_name_or_path: google/gemma-4-E2B-it
-adapter_name_or_path: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/saves/gemma-4-E2B-it/lora/sft_3ep_nothink
-cache_dir: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/.cache/huggingface
+model_name_or_path: google/gemma-4-E4B-it
+adapter_name_or_path: saves/gemma-4-E4B-it/lora/sft_3ep
+cache_dir: .cache/huggingface
 trust_remote_code: true
 
 ### method
@@ -15,7 +15,7 @@ pref_loss: sigmoid
 
 ### dataset
 dataset: dpo_preference_dataset
-dataset_dir: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/datasets
+dataset_dir: datasets
 template: gemma4n
 enable_thinking: false
 cutoff_len: 2048
@@ -25,7 +25,7 @@ preprocessing_num_workers: 1
 dataloader_num_workers: 0
 
 ### output
-output_dir: /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4/saves/gemma-4-E2B-it/lora/dpo_3ep_nothink
+output_dir: saves/gemma-4-E4B-it/lora/dpo_3ep
 logging_steps: 10
 save_steps: 500
 plot_loss: true
@@ -34,8 +34,10 @@ save_only_model: false
 report_to: none
 
 ### train
-per_device_train_batch_size: 1
+per_device_train_batch_size: 8
 gradient_accumulation_steps: 8
+auto_find_batch_size: true
+gradient_checkpointing: true
 learning_rate: 5.0e-6
 num_train_epochs: 3.0
 lr_scheduler_type: cosine

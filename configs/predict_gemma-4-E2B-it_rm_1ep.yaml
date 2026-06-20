@@ -1,33 +1,32 @@
 ### model
-model_name_or_path: google/gemma-4-E4B-it
-adapter_name_or_path: saves/gemma-4-E4B-it/lora/sft_3ep
+model_name_or_path: google/gemma-4-E2B-it
+adapter_name_or_path: saves/gemma-4-E2B-it/lora/rm_1ep
 cache_dir: .cache/huggingface
 trust_remote_code: true
 
 ### method
-stage: sft
+stage: rm
 do_predict: true
 finetuning_type: lora
 
 ### dataset
-eval_dataset: sft_demonstration_dataset_test
+eval_dataset: rm_preference_dataset_test
 dataset_dir: datasets
 template: gemma4n
 enable_thinking: false
-cutoff_len: 1024
-max_samples: 1000
+cutoff_len: 2048
+max_samples: 20000
 overwrite_cache: true
-preprocessing_num_workers: 1
+preprocessing_num_workers: 16
 dataloader_num_workers: 0
 
 ### output
-output_dir: saves/gemma-4-E4B-it/predict/sft_3ep
+output_dir: saves/gemma-4-E2B-it/predict/rm_1ep
 overwrite_output_dir: false
 report_to: none
 
 ### eval
 per_device_eval_batch_size: 1
-predict_with_generate: true
-do_sample: false
+predict_with_generate: false
 bf16: true
 ddp_timeout: 180000000
