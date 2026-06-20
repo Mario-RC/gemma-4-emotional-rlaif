@@ -17,11 +17,66 @@ MODELS = {
     "e2b": "gemma-4-E2B-it",
     "e4b": "gemma-4-E4B-it",
 }
-FULL_STAGES = ("sft", "predict_sft", "dpo", "predict_dpo")
-SMOKE_STAGES = ("sft", "dpo")
+TRAIN_STAGES = ("sft", "rm_1ep", "dpo_1ep", "dpo_3ep", "ppo_1ep")
+PREDICT_STAGES = (
+    "predict_sft_3ep",
+    "predict_rm_1ep",
+    "predict_dpo_1ep",
+    "predict_dpo_3ep",
+    "predict_ppo_1ep",
+)
+FULL_STAGES = (
+    "sft",
+    "predict_sft_3ep",
+    "rm_1ep",
+    "predict_rm_1ep",
+    "dpo_1ep",
+    "predict_dpo_1ep",
+    "dpo_3ep",
+    "predict_dpo_3ep",
+    "ppo_1ep",
+    "predict_ppo_1ep",
+)
 PREDICT_RUNS = {
-    "sft_3ep": "predict_sft",
-    "dpo_3ep": "predict_dpo",
+    "sft_3ep": "predict_sft_3ep",
+    "rm_1ep": "predict_rm_1ep",
+    "dpo_1ep": "predict_dpo_1ep",
+    "dpo_3ep": "predict_dpo_3ep",
+    "ppo_1ep": "predict_ppo_1ep",
+}
+TRAIN_CONFIGS = {
+    "sft": "sft_{model}.yaml",
+    "rm_1ep": "rm_{model}_1ep.yaml",
+    "dpo_1ep": "dpo_{model}_1ep.yaml",
+    "dpo_3ep": "dpo_{model}_3ep.yaml",
+    "ppo_1ep": "ppo_{model}_1ep.yaml",
+}
+PREDICT_CONFIGS = {
+    "predict_sft_3ep": "predict_{model}_sft_3ep.yaml",
+    "predict_rm_1ep": "predict_{model}_rm_1ep.yaml",
+    "predict_dpo_1ep": "predict_{model}_dpo_1ep.yaml",
+    "predict_dpo_3ep": "predict_{model}_dpo_3ep.yaml",
+    "predict_ppo_1ep": "predict_{model}_ppo_1ep.yaml",
+}
+TRAIN_ARTIFACTS = {
+    "sft": ("lora", "sft_3ep", "adapter_model.safetensors"),
+    "rm_1ep": ("lora", "rm_1ep", "adapter_model.safetensors"),
+    "dpo_1ep": ("lora", "dpo_1ep", "adapter_model.safetensors"),
+    "dpo_3ep": ("lora", "dpo_3ep", "adapter_model.safetensors"),
+    "ppo_1ep": ("lora", "ppo_1ep", "adapter_model.safetensors"),
+}
+PREDICT_ARTIFACTS = {
+    "predict_sft_3ep": ("predict", "sft_3ep", "generated_predictions.jsonl"),
+    "predict_rm_1ep": ("predict", "rm_1ep", "generated_predictions.jsonl"),
+    "predict_dpo_1ep": ("predict", "dpo_1ep", "generated_predictions.jsonl"),
+    "predict_dpo_3ep": ("predict", "dpo_3ep", "generated_predictions.jsonl"),
+    "predict_ppo_1ep": ("predict", "ppo_1ep", "generated_predictions.jsonl"),
+}
+ANALYSIS_ARTIFACTS = {
+    "sft_3ep": "demonstration_data_emotional_balanced_test_results.json",
+    "dpo_1ep": "ppo_unlabeled_prompts_dataset_test_results_dpo_1ep.json",
+    "dpo_3ep": "ppo_unlabeled_prompts_dataset_test_results_dpo_3ep.json",
+    "ppo_1ep": "ppo_unlabeled_prompts_dataset_test_results_ppo_1ep.json",
 }
 
 
@@ -39,7 +94,7 @@ def project_env(root: Path) -> dict[str, str]:
     env["HF_DATASETS_CACHE"] = str(hf_home / "datasets")
     env["XDG_CACHE_HOME"] = str(cache_root)
     env["PIP_CACHE_DIR"] = str(cache_root / "pip")
-    env["TMPDIR"] = str(root / "tmp")
+    env["TMPDIR"] = env.get("TMPDIR", "/tmp/gemma4_tmp")
     env["PYTHONPATH"] = f"{root / 'src'}:{env.get('PYTHONPATH', '')}"
     env["PYTHONDONTWRITEBYTECODE"] = "1"
 
@@ -48,7 +103,6 @@ def project_env(root: Path) -> dict[str, str]:
         hf_home / "hub",
         hf_home / "datasets",
         cache_root / "pip",
-        root / "tmp",
         root / "logs",
         root / "analysis",
     ):
@@ -63,53 +117,45 @@ def selected_models(selector: str) -> list[str]:
     return [MODELS[selector]]
 
 
-def model_key(model_name: str) -> str:
-    for key, value in MODELS.items():
-        if value == model_name:
-            return key
-    raise KeyError(model_name)
-
-
 def config_for(model_name: str, stage: str, smoke: bool) -> Path:
-    suffix = "_smoke" if smoke else ""
-    if stage == "predict_sft":
-        if smoke:
-            raise ValueError("No smoke prediction config exists; smoke runs SFT and DPO only.")
-        return ROOT / "configs" / f"predict_{model_name}_sft_3ep.yaml"
-    if stage == "predict_dpo":
-        if smoke:
-            raise ValueError("No smoke prediction config exists; smoke runs SFT and DPO only.")
-        return ROOT / "configs" / f"predict_{model_name}_dpo_3ep.yaml"
-    return ROOT / "configs" / f"{stage}_{model_name}{suffix}.yaml"
+    if smoke:
+        raise ValueError("Smoke configs are not available in gemma-4/configs.")
+    if stage in TRAIN_CONFIGS:
+        filename = TRAIN_CONFIGS[stage].format(model=model_name)
+    elif stage in PREDICT_CONFIGS:
+        filename = PREDICT_CONFIGS[stage].format(model=model_name)
+    else:
+        raise ValueError(f"Unsupported stage: {stage}")
+    return ROOT / "configs" / filename
+
+
+def run_name_for_stage(stage: str) -> str:
+    if stage.startswith("predict_"):
+        return stage.removeprefix("predict_")
+    if stage == "sft":
+        return "sft_3ep"
+    return stage
 
 
 def log_for(model_name: str, stage: str, smoke: bool) -> Path:
     prefix = "smoke_" if smoke else ""
-    if stage in {"dpo", "predict_dpo"}:
-        run_name = "dpo_3ep"
-    else:
-        run_name = "sft_3ep"
-    return ROOT / "logs" / f"{prefix}{stage}_{model_name}_{run_name}.log"
+    return ROOT / "logs" / f"{prefix}{stage}_{model_name}_{run_name_for_stage(stage)}.log"
 
 
 def artifact_for(model_name: str, stage: str, smoke: bool) -> Path:
-    if smoke and stage == "sft":
-        return ROOT / "saves" / model_name / "lora" / "sft_smoke_nothink" / "adapter_model.safetensors"
-    if smoke and stage == "dpo":
-        return ROOT / "saves" / model_name / "lora" / "smoke_nothink" / "adapter_model.safetensors"
-    if stage == "sft":
-        return ROOT / "saves" / model_name / "lora" / "sft_3ep_nothink" / "adapter_model.safetensors"
-    if stage == "dpo":
-        return ROOT / "saves" / model_name / "lora" / "dpo_3ep_nothink" / "adapter_model.safetensors"
-    if stage == "predict_sft":
-        return ROOT / "saves" / model_name / "predict" / "sft_3ep_nothink_greedy" / "generated_predictions.jsonl"
-    if stage == "predict_dpo":
-        return ROOT / "saves" / model_name / "predict" / "dpo_3ep_nothink_greedy" / "generated_predictions.jsonl"
-    raise ValueError(f"Unsupported stage: {stage}")
+    if smoke:
+        raise ValueError("Smoke artifacts are not defined because smoke configs are unavailable.")
+    if stage in TRAIN_ARTIFACTS:
+        parts = TRAIN_ARTIFACTS[stage]
+    elif stage in PREDICT_ARTIFACTS:
+        parts = PREDICT_ARTIFACTS[stage]
+    else:
+        raise ValueError(f"Unsupported stage: {stage}")
+    return ROOT / "saves" / model_name / parts[0] / parts[1] / parts[2]
 
 
 def latest_checkpoint_for(model_name: str, stage: str, smoke: bool) -> Path | None:
-    if stage not in {"sft", "dpo"}:
+    if stage not in TRAIN_STAGES:
         return None
 
     output_dir = artifact_for(model_name, stage, smoke).parent
@@ -201,7 +247,7 @@ def run_llamafactory(
         return 0
     env = project_env(ROOT)
     config_path = config_for(model_name, stage, smoke)
-    if resume and stage in {"sft", "dpo"}:
+    if resume and stage in TRAIN_STAGES:
         checkpoint_path = latest_checkpoint_for(model_name, stage, smoke)
         if checkpoint_path:
             config_path = resume_config_for(config_path, checkpoint_path)
@@ -213,7 +259,9 @@ def run_llamafactory(
 
     log_path = log_for(model_name, stage, smoke)
     command = [str(ROOT / "vgemma4" / "bin" / "llamafactory-cli"), "train", str(config_path)]
-    return stream_command(command, env=env, cwd=ROOT / "LlamaFactory", log_path=log_path)
+    # Run from the project root so relative YAML paths like `datasets/` and
+    # `saves/` resolve inside `gemma-4/` rather than inside `LlamaFactory/`.
+    return stream_command(command, env=env, cwd=ROOT, log_path=log_path)
 
 
 def run_module(module: str, args: list[str]) -> int:
@@ -223,10 +271,11 @@ def run_module(module: str, args: list[str]) -> int:
 
 
 def command_train(args: argparse.Namespace) -> int:
-    stages = FULL_STAGES if args.stage == "pipeline" else (args.stage,)
     if args.smoke:
-        stages = SMOKE_STAGES if args.stage == "pipeline" else (args.stage,)
+        print("[ERROR] Smoke mode is currently unavailable because no smoke configs exist in gemma-4/configs.")
+        return 1
 
+    stages = FULL_STAGES if args.stage == "pipeline" else (args.stage,)
     for model_name in selected_models(args.model):
         for stage in stages:
             code = run_llamafactory(
@@ -307,27 +356,27 @@ def command_login(args: argparse.Namespace) -> int:
 def command_status(args: argparse.Namespace) -> int:
     for model_name in selected_models(args.model):
         paths = {
-            "sft_adapter": ROOT / "saves" / model_name / "lora" / "sft_3ep_nothink" / "adapter_model.safetensors",
-            "sft_predictions": ROOT / "saves" / model_name / "predict" / "sft_3ep_nothink_greedy" / "generated_predictions.jsonl",
-            "sft_analysis": ROOT
-            / "saves"
-            / model_name
-            / "emotional_balanced"
-            / "demonstration_data_emotional_balanced_test_results.json",
-            "dpo_adapter": ROOT / "saves" / model_name / "lora" / "dpo_3ep_nothink" / "adapter_model.safetensors",
-            "dpo_predictions": ROOT / "saves" / model_name / "predict" / "dpo_3ep_nothink_greedy" / "generated_predictions.jsonl",
-            "dpo_analysis": ROOT
-            / "saves"
-            / model_name
-            / "emotional_balanced"
-            / "ppo_unlabeled_prompts_dataset_test_results.json",
+            "sft_adapter": ROOT / "saves" / model_name / "lora" / "sft_3ep" / "adapter_model.safetensors",
+            "sft_predictions": ROOT / "saves" / model_name / "predict" / "sft_3ep" / "generated_predictions.jsonl",
+            "sft_analysis": ROOT / "saves" / model_name / "emotional_balanced" / ANALYSIS_ARTIFACTS["sft_3ep"],
+            "rm_adapter": ROOT / "saves" / model_name / "lora" / "rm_1ep" / "adapter_model.safetensors",
+            "rm_predictions": ROOT / "saves" / model_name / "predict" / "rm_1ep" / "generated_predictions.jsonl",
+            "dpo_1ep_adapter": ROOT / "saves" / model_name / "lora" / "dpo_1ep" / "adapter_model.safetensors",
+            "dpo_1ep_predictions": ROOT / "saves" / model_name / "predict" / "dpo_1ep" / "generated_predictions.jsonl",
+            "dpo_1ep_analysis": ROOT / "saves" / model_name / "emotional_balanced" / ANALYSIS_ARTIFACTS["dpo_1ep"],
+            "dpo_3ep_adapter": ROOT / "saves" / model_name / "lora" / "dpo_3ep" / "adapter_model.safetensors",
+            "dpo_3ep_predictions": ROOT / "saves" / model_name / "predict" / "dpo_3ep" / "generated_predictions.jsonl",
+            "dpo_3ep_analysis": ROOT / "saves" / model_name / "emotional_balanced" / ANALYSIS_ARTIFACTS["dpo_3ep"],
+            "ppo_1ep_adapter": ROOT / "saves" / model_name / "lora" / "ppo_1ep" / "adapter_model.safetensors",
+            "ppo_1ep_predictions": ROOT / "saves" / model_name / "predict" / "ppo_1ep" / "generated_predictions.jsonl",
+            "ppo_1ep_analysis": ROOT / "saves" / model_name / "emotional_balanced" / ANALYSIS_ARTIFACTS["ppo_1ep"],
         }
         print(model_name)
         for label, path in paths.items():
             marker = "OK" if path.exists() else "--"
             print(f"  {marker} {label}: {path}")
 
-        for stage in ("sft", "dpo"):
+        for stage in TRAIN_STAGES:
             checkpoint_path = latest_checkpoint_for(model_name, stage, smoke=False)
             if checkpoint_path and not artifact_for(model_name, stage, smoke=False).exists():
                 print(f"  OK {stage}_checkpoint: {checkpoint_path}")
@@ -345,15 +394,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    train = subparsers.add_parser("train", help="Run one stage or SFT+SFT-predict+DPO+DPO-predict.")
+    train = subparsers.add_parser(
+        "train",
+        help="Run one stage or the full SFT+RM+DPO+PPO train/predict workflow.",
+    )
     train.add_argument("model", choices=[*MODELS, "all"])
     train.add_argument("--stage", choices=[*FULL_STAGES, "pipeline"], default="pipeline")
-    train.add_argument("--smoke", action="store_true", help="Use smoke configs; pipeline runs SFT and DPO only.")
+    train.add_argument("--smoke", action="store_true", help="Currently unavailable because no smoke configs exist.")
     train.add_argument("--force", action="store_true", help="Rerun stages even when their expected artifacts exist.")
-    train.add_argument("--resume", action="store_true", help="Resume SFT/DPO stages from the latest checkpoint if present.")
+    train.add_argument("--resume", action="store_true", help="Resume training stages from the latest checkpoint if present.")
     train.set_defaults(func=command_train)
 
-    predict = subparsers.add_parser("predict", help="Run SFT and/or DPO prediction on the matching test set.")
+    predict = subparsers.add_parser("predict", help="Run one or more prediction configs on the matching test set.")
     predict.add_argument("model", choices=[*MODELS, "all"], nargs="?", default="all")
     predict.add_argument("--run-name", choices=[*PREDICT_RUNS, "all"], default="all")
     predict.add_argument("--force", action="store_true", help="Regenerate predictions even when they already exist.")
@@ -363,15 +415,15 @@ def build_parser() -> argparse.ArgumentParser:
     add_common_analysis_args(analyze)
     analyze.set_defaults(func=command_analyze)
 
-    pipeline = subparsers.add_parser("pipeline", help="Run full train pipeline and then analysis.")
+    pipeline = subparsers.add_parser("pipeline", help="Run the full train/predict workflow and then analysis.")
     pipeline.add_argument("model", choices=[*MODELS, "all"])
-    pipeline.add_argument("--smoke", action="store_true", help="Run smoke SFT+DPO only; analysis is skipped.")
+    pipeline.add_argument("--smoke", action="store_true", help="Currently unavailable because no smoke configs exist.")
     pipeline.add_argument("--skip-analysis", action="store_true")
     pipeline.add_argument("--dataset", default=None)
     pipeline.add_argument("--run-name", choices=[*PREDICT_RUNS, "all"], default="all")
     pipeline.add_argument("--strict", action="store_true")
     pipeline.add_argument("--force", action="store_true", help="Rerun all pipeline stages even when artifacts exist.")
-    pipeline.add_argument("--resume", action="store_true", help="Resume SFT/DPO stages from the latest checkpoint if present.")
+    pipeline.add_argument("--resume", action="store_true", help="Resume training stages from the latest checkpoint if present.")
     pipeline.set_defaults(func=command_pipeline)
 
     data = subparsers.add_parser("data", help="Download and prepare datasets from Hugging Face.")

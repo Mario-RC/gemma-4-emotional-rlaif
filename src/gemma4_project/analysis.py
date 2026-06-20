@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Analyze Gemma4 SFT and DPO predictions on their matching test sets."""
+"""Analyze Gemma4 prediction runs on their matching test sets."""
 
 from __future__ import annotations
 
@@ -17,13 +17,23 @@ DEFAULT_MODELS = ("gemma-4-E2B-it", "gemma-4-E4B-it")
 RUN_CONFIGS = {
     "sft_3ep": {
         "dataset": "sft_demonstration_dataset_test",
-        "prediction_run": "sft_3ep_nothink_greedy",
+        "prediction_run": "sft_3ep",
         "result_file": "demonstration_data_emotional_balanced_test_results.json",
+    },
+    "dpo_1ep": {
+        "dataset": "ppo_unlabeled_prompts_dataset_test",
+        "prediction_run": "dpo_1ep",
+        "result_file": "ppo_unlabeled_prompts_dataset_test_results_dpo_1ep.json",
     },
     "dpo_3ep": {
         "dataset": "ppo_unlabeled_prompts_dataset_test",
-        "prediction_run": "dpo_3ep_nothink_greedy",
-        "result_file": "ppo_unlabeled_prompts_dataset_test_results.json",
+        "prediction_run": "dpo_3ep",
+        "result_file": "ppo_unlabeled_prompts_dataset_test_results_dpo_3ep.json",
+    },
+    "ppo_1ep": {
+        "dataset": "ppo_unlabeled_prompts_dataset_test",
+        "prediction_run": "ppo_1ep",
+        "result_file": "ppo_unlabeled_prompts_dataset_test_results_ppo_1ep.json",
     },
 }
 DEFAULT_RUNS = tuple(RUN_CONFIGS)

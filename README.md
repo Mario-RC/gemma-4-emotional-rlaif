@@ -1,7 +1,7 @@
 # Gemma 4 Emotional RLAIF DPO
 
 Standalone project for training and evaluating Gemma4 models with an emotional
-SFT and DPO/RLAIF workflow.
+SFT, RM, DPO, and PPO workflow.
 
 Repository name:
 
@@ -23,9 +23,12 @@ Models:
 Training stages:
 
 - SFT LoRA, 3 epochs.
+- RM LoRA, 1 epoch, initialized from the corresponding SFT adapter.
+- DPO LoRA, 1 epoch, initialized from the corresponding SFT adapter.
 - DPO LoRA, 3 epochs, initialized from the corresponding SFT adapter.
-- Test-set prediction after SFT and after DPO.
-- Metric analysis for SFT and DPO predictions.
+- PPO LoRA, 1 epoch, initialized from the corresponding SFT adapter and paired RM adapter.
+- Test-set prediction after SFT, DPO, RM, and PPO runs.
+- Metric analysis for `dpo_1ep`, `dpo_3ep`, and `ppo_1ep` predictions.
 
 ## Data Source
 
@@ -52,6 +55,8 @@ The expected local LlamaFactory dataset files are:
 | `datasets/sft_demonstration_dataset_test.json` | phase2 SFT |
 | `datasets/sft_demonstration_dataset_test_history.json` | phase2 SFT |
 | `datasets/dpo_preference_dataset.json` | phase3 RLAIF |
+| `datasets/rm_preference_dataset.json` | phase3 RLAIF |
+| `datasets/rm_preference_dataset_test.json` | phase3 RLAIF |
 | `datasets/ppo_unlabeled_prompts_dataset.json` | phase3 RLAIF |
 | `datasets/ppo_unlabeled_prompts_dataset_test.json` | phase3 RLAIF |
 
@@ -62,11 +67,10 @@ gemma-4/
   README.md
   LlamaFactory/                 # cloned LlamaFactory checkout
   vgemma4/                      # project-local virtual environment
-  configs/                      # SFT, DPO, and prediction YAML configs
-  datasets/                     # local SFT, DPO, and test datasets
+  configs/                      # train and predict YAML configs
+  datasets/                     # local SFT, RM, DPO, PPO, and test datasets
   saves/                        # adapters, predictions, analyzed per-model outputs
   logs/                         # training and prediction logs
-  analysis/                     # summary and DPO comparison tables
   src/gemma4_project/           # dataset and analysis Python modules
   scripts/
     gemma4.py                   # main CLI entrypoint
@@ -150,11 +154,11 @@ Run both models:
 scripts/gemma4.py pipeline all --strict
 ```
 
-The full pipeline runs:
+The pipeline currently automates:
 
 1. SFT training.
 2. SFT test prediction.
-3. DPO training from the SFT adapter.
+3. DPO training.
 4. DPO test prediction.
 5. Analysis.
 
@@ -205,26 +209,21 @@ scripts/gemma4.py train e2b --stage sft
 scripts/gemma4.py predict e2b --run-name sft_3ep
 ```
 
-DPO:
+DPO via CLI:
 
 ```bash
 scripts/gemma4.py train e2b --stage dpo
 scripts/gemma4.py predict e2b --run-name dpo_3ep
 ```
 
-Analyze existing predictions:
+Direct YAML-driven runs for configs not yet wired into the main CLI can be
+launched through LlamaFactory, for example:
 
 ```bash
-scripts/gemma4.py analyze e2b --run-name all --strict
-```
-
-## Smoke Runs
-
-Smoke runs are available for quick checks of SFT and DPO configs. They do not
-run prediction or analysis:
-
-```bash
-scripts/gemma4.py train e2b --stage pipeline --smoke
+llamafactory-cli train configs/rm_gemma-4-E2B-it_1ep.yaml
+llamafactory-cli train configs/ppo_gemma-4-E2B-it_1ep.yaml
+llamafactory-cli train configs/predict_gemma-4-E2B-it_rm_1ep.yaml
+llamafactory-cli train configs/predict_gemma-4-E2B-it_ppo_1ep.yaml
 ```
 
 ## Outputs
@@ -236,9 +235,21 @@ saves/<model>/lora/sft_3ep/adapter_model.safetensors
 saves/<model>/predict/sft_3ep/generated_predictions.jsonl
 saves/<model>/emotional_balanced/demonstration_data_emotional_balanced_test_results.json
 
+saves/<model>/lora/rm_1ep/adapter_model.safetensors
+saves/<model>/predict/rm_1ep/generated_predictions.jsonl
+saves/<model>/emotional_balanced/rm_preference_dataset_test_results.json
+
+saves/<model>/lora/dpo_1ep/adapter_model.safetensors
+saves/<model>/predict/dpo_1ep/generated_predictions.jsonl
+saves/<model>/emotional_balanced/ppo_unlabeled_prompts_dataset_test_results_dpo_1ep.json
+
 saves/<model>/lora/dpo_3ep/adapter_model.safetensors
 saves/<model>/predict/dpo_3ep/generated_predictions.jsonl
-saves/<model>/emotional_balanced/ppo_unlabeled_prompts_dataset_test_results.json
+saves/<model>/emotional_balanced/ppo_unlabeled_prompts_dataset_test_results_dpo_3ep.json
+
+saves/<model>/lora/ppo_1ep/adapter_model.safetensors
+saves/<model>/predict/ppo_1ep/generated_predictions.jsonl
+saves/<model>/emotional_balanced/ppo_unlabeled_prompts_dataset_test_results_ppo_1ep.json
 ```
 
 Project-level summaries are written to:
@@ -279,71 +290,6 @@ Use project-local Hugging Face login if needed:
 ```bash
 scripts/gemma4.py login
 ```
-
-## NFS Stability
-
-The configs use conservative worker settings:
-
-```yaml
-preprocessing_num_workers: 1
-dataloader_num_workers: 0
-```
-
-This avoids common NFS cleanup errors such as `.nfs... Device or resource busy`
-during dataset preprocessing or worker shutdown.
-
-## GitHub Notes
-
-This repository tracks code, configs, and documentation. Large generated
-artifacts stay out of Git unless intentionally handled with Git LFS:
-
-- `vgemma4/`
-- `.cache/`
-- `tmp/`
-- model adapters in `saves/`
-- prediction logs in `logs/`
-- large local datasets in `datasets/`
-- the third-party `LlamaFactory/` checkout
-
-The `.gitignore` is configured for that policy while keeping
-`datasets/dataset_info.json` trackable.
-
-## GitHub Upload
-
-Use the repository name:
-
-```text
-gemma-4-emotional-rlaif-dpo
-```
-
-Because this directory can live inside a larger RLAIF Git workspace, first check
-which directory Git considers the repository root:
-
-```bash
-git rev-parse --show-toplevel
-```
-
-For an independent GitHub repository, the top level should be this `gemma-4`
-directory. If Git reports a parent workspace instead, initialize a new repository
-inside `gemma-4`:
-
-```bash
-git init -b main
-git remote add origin git@github.com:<user>/gemma-4-emotional-rlaif-dpo.git
-```
-
-Stage only the reproducible project files:
-
-```bash
-git add README.md LICENSE .gitignore configs datasets/dataset_info.json scripts src
-git status --short --ignored
-git commit -m "Initial Gemma4 emotional RLAIF DPO project"
-git push -u origin main
-```
-
-Do not add `vgemma4/`, `.cache/`, `tmp/`, `LlamaFactory/`, `saves/`, `logs/`,
-`analysis/`, or the generated large dataset JSON files unless there is a
-deliberate Git LFS plan for them.
 
 ## License
 
