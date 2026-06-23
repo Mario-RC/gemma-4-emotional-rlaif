@@ -117,9 +117,7 @@ def selected_models(selector: str) -> list[str]:
     return [MODELS[selector]]
 
 
-def config_for(model_name: str, stage: str, smoke: bool) -> Path:
-    if smoke:
-        raise ValueError("Smoke configs are not available in gemma-4/configs.")
+def config_for(model_name: str, stage: str) -> Path:
     if stage in TRAIN_CONFIGS:
         filename = TRAIN_CONFIGS[stage].format(model=model_name)
     elif stage in PREDICT_CONFIGS:
@@ -137,14 +135,11 @@ def run_name_for_stage(stage: str) -> str:
     return stage
 
 
-def log_for(model_name: str, stage: str, smoke: bool) -> Path:
-    prefix = "smoke_" if smoke else ""
-    return ROOT / "logs" / f"{prefix}{stage}_{model_name}_{run_name_for_stage(stage)}.log"
+def log_for(model_name: str, stage: str) -> Path:
+    return ROOT / "logs" / f"{stage}_{model_name}_{run_name_for_stage(stage)}.log"
 
 
-def artifact_for(model_name: str, stage: str, smoke: bool) -> Path:
-    if smoke:
-        raise ValueError("Smoke artifacts are not defined because smoke configs are unavailable.")
+def artifact_for(model_name: str, stage: str) -> Path:
     if stage in TRAIN_ARTIFACTS:
         parts = TRAIN_ARTIFACTS[stage]
     elif stage in PREDICT_ARTIFACTS:
@@ -154,11 +149,11 @@ def artifact_for(model_name: str, stage: str, smoke: bool) -> Path:
     return ROOT / "saves" / model_name / parts[0] / parts[1] / parts[2]
 
 
-def latest_checkpoint_for(model_name: str, stage: str, smoke: bool) -> Path | None:
+def latest_checkpoint_for(model_name: str, stage: str) -> Path | None:
     if stage not in TRAIN_STAGES:
         return None
 
-    output_dir = artifact_for(model_name, stage, smoke).parent
+    output_dir = artifact_for(model_name, stage).parent
     if not output_dir.exists():
         return None
 
@@ -184,7 +179,15 @@ def resume_config_for(config_path: Path, checkpoint_path: Path) -> Path:
     if not isinstance(config, dict):
         raise TypeError(f"Expected a YAML mapping in {config_path}")
 
-    config["resume_from_checkpoint"] = str(checkpoint_path)
+    # Keep resume configs portable by storing paths relative to the project root.
+    for key in ("adapter_name_or_path", "cache_dir", "dataset_dir", "output_dir"):
+        value = config.get(key)
+        if isinstance(value, str):
+            path_value = Path(value)
+            if path_value.is_absolute():
+                config[key] = os.path.relpath(path_value, ROOT)
+
+    config["resume_from_checkpoint"] = os.path.relpath(checkpoint_path, ROOT)
     config["overwrite_output_dir"] = False
 
     output_dir = ROOT / "tmp" / "resume_configs"
@@ -238,17 +241,16 @@ def stream_command(command: list[str], env: dict[str, str], cwd: Path, log_path:
 def run_llamafactory(
     model_name: str,
     stage: str,
-    smoke: bool,
     force: bool = False,
     resume: bool = False,
 ) -> int:
-    artifact = artifact_for(model_name, stage, smoke)
+    artifact = artifact_for(model_name, stage)
     if skip_existing(f"{model_name} {stage}", artifact, force):
         return 0
     env = project_env(ROOT)
-    config_path = config_for(model_name, stage, smoke)
+    config_path = config_for(model_name, stage)
     if resume and stage in TRAIN_STAGES:
-        checkpoint_path = latest_checkpoint_for(model_name, stage, smoke)
+        checkpoint_path = latest_checkpoint_for(model_name, stage)
         if checkpoint_path:
             config_path = resume_config_for(config_path, checkpoint_path)
             print(f"[RESUME] {model_name} {stage}: using {checkpoint_path}")
@@ -257,7 +259,7 @@ def run_llamafactory(
     elif resume:
         print(f"[INFO] {model_name} {stage}: --resume only applies to training stages; using the base config.")
 
-    log_path = log_for(model_name, stage, smoke)
+    log_path = log_for(model_name, stage)
     command = [str(ROOT / "vgemma4" / "bin" / "llamafactory-cli"), "train", str(config_path)]
     # Run from the project root so relative YAML paths like `datasets/` and
     # `saves/` resolve inside `gemma-4/` rather than inside `LlamaFactory/`.
@@ -271,17 +273,12 @@ def run_module(module: str, args: list[str]) -> int:
 
 
 def command_train(args: argparse.Namespace) -> int:
-    if args.smoke:
-        print("[ERROR] Smoke mode is currently unavailable because no smoke configs exist in gemma-4/configs.")
-        return 1
-
     stages = FULL_STAGES if args.stage == "pipeline" else (args.stage,)
     for model_name in selected_models(args.model):
         for stage in stages:
             code = run_llamafactory(
                 model_name,
                 stage,
-                args.smoke,
                 force=args.force,
                 resume=getattr(args, "resume", False),
             )
@@ -294,7 +291,7 @@ def command_predict(args: argparse.Namespace) -> int:
     run_names = list(PREDICT_RUNS) if args.run_name == "all" else [args.run_name]
     for model_name in selected_models(args.model):
         for run_name in run_names:
-            code = run_llamafactory(model_name, PREDICT_RUNS[run_name], smoke=False, force=args.force)
+            code = run_llamafactory(model_name, PREDICT_RUNS[run_name], force=args.force)
             if code != 0:
                 return code
     return 0
@@ -320,12 +317,11 @@ def command_pipeline(args: argparse.Namespace) -> int:
     train_args = argparse.Namespace(
         model=args.model,
         stage="pipeline",
-        smoke=args.smoke,
         force=args.force,
         resume=args.resume,
     )
     code = command_train(train_args)
-    if code != 0 or args.smoke or args.skip_analysis:
+    if code != 0 or args.skip_analysis:
         return code
     analyze_args = argparse.Namespace(
         model=args.model,
@@ -377,8 +373,8 @@ def command_status(args: argparse.Namespace) -> int:
             print(f"  {marker} {label}: {path}")
 
         for stage in TRAIN_STAGES:
-            checkpoint_path = latest_checkpoint_for(model_name, stage, smoke=False)
-            if checkpoint_path and not artifact_for(model_name, stage, smoke=False).exists():
+            checkpoint_path = latest_checkpoint_for(model_name, stage)
+            if checkpoint_path and not artifact_for(model_name, stage).exists():
                 print(f"  OK {stage}_checkpoint: {checkpoint_path}")
     return 0
 
@@ -400,7 +396,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     train.add_argument("model", choices=[*MODELS, "all"])
     train.add_argument("--stage", choices=[*FULL_STAGES, "pipeline"], default="pipeline")
-    train.add_argument("--smoke", action="store_true", help="Currently unavailable because no smoke configs exist.")
     train.add_argument("--force", action="store_true", help="Rerun stages even when their expected artifacts exist.")
     train.add_argument("--resume", action="store_true", help="Resume training stages from the latest checkpoint if present.")
     train.set_defaults(func=command_train)
@@ -417,7 +412,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     pipeline = subparsers.add_parser("pipeline", help="Run the full train/predict workflow and then analysis.")
     pipeline.add_argument("model", choices=[*MODELS, "all"])
-    pipeline.add_argument("--smoke", action="store_true", help="Currently unavailable because no smoke configs exist.")
     pipeline.add_argument("--skip-analysis", action="store_true")
     pipeline.add_argument("--dataset", default=None)
     pipeline.add_argument("--run-name", choices=[*PREDICT_RUNS, "all"], default="all")
