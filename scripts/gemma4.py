@@ -94,7 +94,7 @@ def project_env(root: Path) -> dict[str, str]:
     env["HF_DATASETS_CACHE"] = str(hf_home / "datasets")
     env["XDG_CACHE_HOME"] = str(cache_root)
     env["PIP_CACHE_DIR"] = str(cache_root / "pip")
-    env["TMPDIR"] = env.get("TMPDIR", "/tmp/gemma4_tmp")
+    env["TMPDIR"] = env.get("TMPDIR", str(root / "tmp"))
     env["PYTHONPATH"] = f"{root / 'src'}:{env.get('PYTHONPATH', '')}"
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["DISABLE_VERSION_CHECK"] = "1"

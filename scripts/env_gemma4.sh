@@ -10,7 +10,7 @@ export HF_HUB_CACHE="$HF_HOME/hub"
 export HF_DATASETS_CACHE="$HF_HOME/datasets"
 export XDG_CACHE_HOME="$GEMMA4_ROOT/.cache"
 export PIP_CACHE_DIR="$GEMMA4_ROOT/.cache/pip"
-export TMPDIR="${TMPDIR:-/tmp/gemma4_tmp}"
+export TMPDIR="${TMPDIR:-$GEMMA4_ROOT/tmp}"
 export PYTHONPATH="$GEMMA4_ROOT/src:${PYTHONPATH:-}"
 export PYTHONDONTWRITEBYTECODE=1
 
