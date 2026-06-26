@@ -32,13 +32,10 @@ Training stages:
 
 ## Data Source
 
-Training and prediction datasets mirror the canonical phase2 SFT and phase3
-RLAIF LlamaFactory datasets. The large JSON files are kept local and ignored by
-Git; `datasets/dataset_info.json` is the trackable index.
-
-```text
-mario-rc/aif-emotional-generation
-```
+Training and prediction datasets are downloaded from the Hugging Face dataset
+[`mario-rc/aif-emotional-generation`](https://huggingface.co/datasets/mario-rc/aif-emotional-generation).
+Store the prepared LlamaFactory JSON files in `datasets/`, next to the
+trackable `datasets/dataset_info.json` index.
 
 Use this check after syncing the large local JSON files:
 
@@ -102,7 +99,7 @@ Create or activate the project environment, then clone LlamaFactory into the
 expected local path:
 
 ```bash
-cd /autofs/thau00a/home/mrodriguez/data/rlaif/gemma-4
+cd gemma-4
 python3 -m venv vgemma4
 source vgemma4/bin/activate
 python -m pip install --upgrade pip setuptools wheel
