@@ -97,6 +97,7 @@ def project_env(root: Path) -> dict[str, str]:
     env["TMPDIR"] = env.get("TMPDIR", "/tmp/gemma4_tmp")
     env["PYTHONPATH"] = f"{root / 'src'}:{env.get('PYTHONPATH', '')}"
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["DISABLE_VERSION_CHECK"] = "1"
 
     for directory in (
         hf_home,
@@ -274,6 +275,7 @@ def run_module(module: str, args: list[str]) -> int:
 
 def command_train(args: argparse.Namespace) -> int:
     stages = FULL_STAGES if args.stage == "pipeline" else (args.stage,)
+    first_failure = 0
     for model_name in selected_models(args.model):
         for stage in stages:
             code = run_llamafactory(
@@ -283,18 +285,27 @@ def command_train(args: argparse.Namespace) -> int:
                 resume=getattr(args, "resume", False),
             )
             if code != 0:
-                return code
-    return 0
+                if args.model != "all":
+                    return code
+                print(f"[ERROR] {model_name} {stage} failed with exit code {code}; continuing with the next model.")
+                first_failure = first_failure or code
+                break
+    return first_failure
 
 
 def command_predict(args: argparse.Namespace) -> int:
     run_names = list(PREDICT_RUNS) if args.run_name == "all" else [args.run_name]
+    first_failure = 0
     for model_name in selected_models(args.model):
         for run_name in run_names:
             code = run_llamafactory(model_name, PREDICT_RUNS[run_name], force=args.force)
             if code != 0:
-                return code
-    return 0
+                if args.model != "all":
+                    return code
+                print(f"[ERROR] {model_name} {PREDICT_RUNS[run_name]} failed with exit code {code}; continuing with the next model.")
+                first_failure = first_failure or code
+                break
+    return first_failure
 
 
 def analysis_args(args: argparse.Namespace) -> list[str]:
