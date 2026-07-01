@@ -33,7 +33,7 @@ save_only_model: false
 report_to: none
 
 ### train
-per_device_train_batch_size: 8
+per_device_train_batch_size: 2
 gradient_accumulation_steps: 8
 auto_find_batch_size: true
 gradient_checkpointing: true
