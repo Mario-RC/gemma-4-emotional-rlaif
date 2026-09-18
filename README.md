@@ -330,7 +330,7 @@ Use the published tokenizer with `enable_thinking=False` and load the original m
 
 ## License
 
-This project is released under the MIT License. See `LICENSE`.
+This project is released under the Apache License 2.0. See `LICENSE`.
 
 The license applies to this project's code, configs, and documentation. Third
 party projects, model weights, datasets, and Hugging Face artifacts remain under
