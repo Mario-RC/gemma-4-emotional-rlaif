@@ -1,4 +1,4 @@
-# Gemma 4 Emotional RLAIF
+# Gemma 4 Emotional RLAIF Alignment
 
 Standalone project for training and evaluating Gemma4 models with an emotional
 SFT, RM, DPO, and PPO workflow.
@@ -310,6 +310,10 @@ The selected models below are available on Hugging Face. These supersede the ori
 See each model card for its inference examples, training parameters and license. The four DPO/PPO adapters were evaluated on the same 392 English dialogue examples from `mario-rc/aif-emotional-generation/dialogues`, split `test`; SFT and RM also have separate stage-specific evaluation sets. E2B selection reused the task test set; its results are not untouched held-out selection evidence.
 
 Use the published tokenizer with `enable_thinking=False` and load the original multimodal base with `AutoModelForImageTextToText`, then the PEFT adapter. Gemma-4 is Apache-2.0.
+
+## Project Origin
+
+This project is based on the original [Mario-RC/aif-emotional-model](https://github.com/Mario-RC/aif-emotional-model) project.
 
 ## License
 
