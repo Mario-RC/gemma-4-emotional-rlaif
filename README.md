@@ -9,8 +9,7 @@ Repository name:
 gemma-4-emotional-rlaif
 ```
 
-The project is intentionally isolated from the rest of the RLAIF workspace. Its
-virtual environment, Hugging Face cache, datasets, configs, logs, adapters,
+The project's virtual environment, Hugging Face cache, datasets, configs, logs, adapters,
 predictions, and analysis results all live under this directory.
 
 ## Scope
@@ -68,7 +67,7 @@ The expected local LlamaFactory dataset files are:
 ## Layout
 
 ```text
-gemma-4/
+gemma-4-emotional-rlaif/
   README.md
   LlamaFactory/                 # cloned LlamaFactory checkout
   vgemma4/                      # project-local virtual environment
@@ -122,7 +121,7 @@ python -m pip install -e ./LlamaFactory
 ```
 
 The local CLI expects the checkout at `LlamaFactory/` and writes all runtime
-caches under `gemma-4/`.
+caches under `gemma-4-emotional-rlaif/`.
 
 Then download/prepare the datasets from Hugging Face:
 
@@ -281,7 +280,7 @@ The project-local environment is `vgemma4`.
 By default, `scripts/gemma4.py` infers the project root from its own location.
 Set `GEMMA4_ROOT` only if you intentionally want to override that path.
 
-The CLI sets these paths inside `gemma-4` before launching LlamaFactory:
+The CLI sets these paths inside the project directory before launching LlamaFactory:
 
 - `HF_HOME`
 - `HF_HUB_CACHE`

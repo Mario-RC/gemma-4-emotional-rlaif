@@ -34,11 +34,6 @@ OPTIONAL_TARGET_FILES = (
     "sft_demonstration_dataset_foundation.json",
     "sft_demonstration_dataset_test_history.json",
 )
-CANONICAL_RM_DIR = (
-    DEFAULT_ROOT.parent
-    / "sml-rlaif-alignment"
-    / "data"
-)
 
 
 def load_json(path: Path) -> list[dict[str, Any]]:
@@ -96,8 +91,7 @@ def filter_by_set(rows: list[dict[str, Any]], split_name: str) -> list[dict[str,
 
 
 def canonical_rm_source(filename: str, root: Path = DEFAULT_ROOT) -> Path:
-    source = CANONICAL_RM_DIR / filename
-    return source if source.exists() else root / "datasets" / filename
+    return root / "datasets" / filename
 
 
 def require_local_source(path: Path) -> Path:
@@ -140,11 +134,11 @@ def prepare_datasets(root: Path, repo_id: str, revision: str | None, force: bool
     datasets_dir = root / "datasets"
     datasets_dir.mkdir(parents=True, exist_ok=True)
 
+    rm_train_path = require_local_source(canonical_rm_source("rm_preference_dataset.json", root))
+    rm_test_path = require_local_source(canonical_rm_source("rm_preference_dataset_test.json", root))
     dialogues_train_path = download_source(repo_id, "dialogues/train.json", revision)
     dialogues_test_path = download_source(repo_id, "dialogues/test.json", revision)
     dpo_train_path = download_source(repo_id, "aif_annotations/train.json", revision)
-    rm_train_path = require_local_source(canonical_rm_source("rm_preference_dataset.json", root))
-    rm_test_path = require_local_source(canonical_rm_source("rm_preference_dataset_test.json", root))
 
     dialogues_train = load_json(dialogues_train_path)
     dialogues_test = load_json(dialogues_test_path)
