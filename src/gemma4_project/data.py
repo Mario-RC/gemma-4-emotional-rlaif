@@ -23,20 +23,20 @@ SOURCE_FILES = (
 )
 TARGET_FILES = (
     "sft_demonstration_dataset.json",
-    "sft_demonstration_dataset_foundation.json",
     "sft_demonstration_dataset_test.json",
-    "sft_demonstration_dataset_test_history.json",
     "dpo_preference_dataset.json",
     "rm_preference_dataset.json",
     "rm_preference_dataset_test.json",
     "ppo_unlabeled_prompts_dataset.json",
     "ppo_unlabeled_prompts_dataset_test.json",
 )
+OPTIONAL_TARGET_FILES = (
+    "sft_demonstration_dataset_foundation.json",
+    "sft_demonstration_dataset_test_history.json",
+)
 CANONICAL_RM_DIR = (
     DEFAULT_ROOT.parent
     / "sml-rlaif-alignment"
-    / "rlaif-model"
-    / "rlaif-llama-factory-training"
     / "data"
 )
 
@@ -63,6 +63,9 @@ def write_json(path: Path, data: list[dict[str, Any]], force: bool) -> bool:
 def copy_json(path: Path, source_path: Path, force: bool) -> bool:
     if path.exists() and not force:
         print(f"[SKIP] {path} exists. Use --force to overwrite.")
+        return False
+    if path.resolve() == source_path.resolve():
+        print(f"[KEEP] {path} is already the supplied source file.")
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source_path, path)
@@ -92,15 +95,16 @@ def filter_by_set(rows: list[dict[str, Any]], split_name: str) -> list[dict[str,
     return [row for row in rows if row.get("set") == split_name]
 
 
-def canonical_rm_source(filename: str) -> Path:
-    return CANONICAL_RM_DIR / filename
+def canonical_rm_source(filename: str, root: Path = DEFAULT_ROOT) -> Path:
+    source = CANONICAL_RM_DIR / filename
+    return source if source.exists() else root / "datasets" / filename
 
 
 def require_local_source(path: Path) -> Path:
     if not path.exists():
         raise FileNotFoundError(
             f"Required local dataset source not found: {path}. "
-            "Sync or generate the canonical RM dataset files before running gemma4.py data."
+            "Supply the canonical RM train/test files in datasets/ before running gemma4.py data."
         )
     return path
 
@@ -121,8 +125,8 @@ def write_manifest(root: Path, repo_id: str, revision: str | None, counts: dict[
             "sft_demonstration_dataset.json": "dialogues/train.json filtered where set == sft-demonstration",
             "sft_demonstration_dataset_test.json": "dialogues/test.json filtered where set == sft-demonstration",
             "dpo_preference_dataset.json": "aif_annotations/train.json",
-            "rm_preference_dataset.json": str(canonical_rm_source('rm_preference_dataset.json')),
-            "rm_preference_dataset_test.json": str(canonical_rm_source('rm_preference_dataset_test.json')),
+            "rm_preference_dataset.json": str(canonical_rm_source('rm_preference_dataset.json', root)),
+            "rm_preference_dataset_test.json": str(canonical_rm_source('rm_preference_dataset_test.json', root)),
             "ppo_unlabeled_prompts_dataset.json": "dialogues/train.json",
             "ppo_unlabeled_prompts_dataset_test.json": "dialogues/test.json",
         },
@@ -139,8 +143,8 @@ def prepare_datasets(root: Path, repo_id: str, revision: str | None, force: bool
     dialogues_train_path = download_source(repo_id, "dialogues/train.json", revision)
     dialogues_test_path = download_source(repo_id, "dialogues/test.json", revision)
     dpo_train_path = download_source(repo_id, "aif_annotations/train.json", revision)
-    rm_train_path = require_local_source(canonical_rm_source("rm_preference_dataset.json"))
-    rm_test_path = require_local_source(canonical_rm_source("rm_preference_dataset_test.json"))
+    rm_train_path = require_local_source(canonical_rm_source("rm_preference_dataset.json", root))
+    rm_test_path = require_local_source(canonical_rm_source("rm_preference_dataset_test.json", root))
 
     dialogues_train = load_json(dialogues_train_path)
     dialogues_test = load_json(dialogues_test_path)
@@ -159,7 +163,7 @@ def prepare_datasets(root: Path, repo_id: str, revision: str | None, force: bool
         "ppo_unlabeled_prompts_dataset.json": len(dialogues_train),
         "ppo_unlabeled_prompts_dataset_test.json": len(dialogues_test),
     }
-    for filename in ("sft_demonstration_dataset_foundation.json", "sft_demonstration_dataset_test_history.json"):
+    for filename in OPTIONAL_TARGET_FILES:
         path = datasets_dir / filename
         if path.exists():
             targets[filename] = len(load_json(path))
@@ -184,7 +188,8 @@ def prepare_datasets(root: Path, repo_id: str, revision: str | None, force: bool
 
 def verify_datasets(root: Path) -> int:
     missing = []
-    for filename in TARGET_FILES:
+    optional = tuple(name for name in OPTIONAL_TARGET_FILES if (root / "datasets" / name).exists())
+    for filename in TARGET_FILES + optional:
         path = root / "datasets" / filename
         if not path.exists():
             missing.append(str(path))
