@@ -124,11 +124,11 @@ def score_records(records: list[dict[str, Any]], predict_key: str) -> dict[str, 
     for record in records:
         target_tags = extract_emotions(str(record.get("target", "")))[:3]
         predicted = str(record.get(predict_key, ""))
-        predicted_tags = extract_emotions(predicted)[:3]
+        predicted_tags = extract_emotions(predicted)
 
         if not predicted:
             missing += 1
-        if len(predicted_tags) >= 3:
+        if len(predicted_tags) == 3:
             valid_three_tags += 1
         if len(predicted_tags) >= 3 and predicted_tags[2] == "(NEUTRAL)":
             third_neutral += 1

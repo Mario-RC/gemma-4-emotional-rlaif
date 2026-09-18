@@ -1,4 +1,4 @@
-# Gemma 4 Emotional RLAIF DPO
+# Gemma 4 Emotional RLAIF
 
 Standalone project for training and evaluating Gemma4 models with an emotional
 SFT, RM, DPO, and PPO workflow.
@@ -6,7 +6,7 @@ SFT, RM, DPO, and PPO workflow.
 Repository name:
 
 ```text
-gemma-4-emotional-rlaif-dpo
+gemma-4-emotional-rlaif
 ```
 
 The project is intentionally isolated from the rest of the RLAIF workspace. Its
@@ -88,7 +88,7 @@ Create or activate a Python 3.12 project environment. If the project
 LlamaFactory checkout is absent, obtain its upstream starting point:
 
 ```bash
-cd gemma-4
+cd gemma-4-emotional-rlaif
 python3.12 -m venv vgemma4
 source vgemma4/bin/activate
 python -m pip install --upgrade pip setuptools wheel
@@ -238,22 +238,6 @@ scripts/gemma4.py predict e2b --run-name rm_1ep
 scripts/gemma4.py train e2b --stage ppo_1ep
 scripts/gemma4.py predict e2b --run-name ppo_1ep
 ```
-
-## Isolated Optimization Experiments
-
-The initial optimization study's dialogue-grouped splits, DPO/RM/SFT hyperparameter matrix, safer PPO
-launcher, and robust checkpoint evaluation live in
-`experiments/optimized/README.md`.
-
-Generate the isolated configs and inspect their status with:
-
-```bash
-scripts/optimized_experiments.py prepare
-scripts/optimized_experiments.py status
-```
-
-The optimized runner refuses to prepare large derived datasets or start a new
-run while another Gemma4 LlamaFactory process is active.
 
 ## Analysis
 
