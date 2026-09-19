@@ -133,7 +133,7 @@ def score_records(records: list[dict[str, Any]], predict_key: str) -> dict[str, 
         if len(predicted_tags) >= 3 and predicted_tags[2] == "(NEUTRAL)":
             third_neutral += 1
 
-        row_all_correct = len(target_tags) >= 3 and len(predicted_tags) >= 3
+        row_all_correct = len(target_tags) >= 3 and len(predicted_tags) == 3
         for idx in range(3):
             if len(target_tags) > idx:
                 target_available[idx] += 1
